@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>航空电子元件库存管理系统 - 个人中心</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <h2>航材库存管理</h2>
+        <a href="dashboard.html">首页</a>
+        <a href="components.html">元件管理</a>
+        <a href="inventory.html">出入库管理</a>
+        <a href="categories.html?v=20260716-2">分类管理</a>
+        <a href="suppliers.html">供应商管理</a>
+        <a href="profile.html" class="active">个人中心</a>
+        <span class="user-info">欢迎, <span id="currentUser">管理员</span> | <a href="logout">退出</a></span>
+    </nav>
+
+    <div class="main-content">
+        <div class="profile-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+            <!-- 用户信息卡 -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>用户信息</h3>
+                </div>
+                <div style="padding: 20px;">
+                    <div class="profile-row" style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-line); font-family: var(--font-mono); font-size: 13px;">
+                        <span style="color: var(--text-tertiary); letter-spacing: 0.05em;">// USERNAME</span>
+                        <span id="pUsername" style="color: var(--accent-cobalt-bright);">-</span>
+                    </div>
+                    <div class="profile-row" style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-line); font-family: var(--font-mono); font-size: 13px;">
+                        <span style="color: var(--text-tertiary); letter-spacing: 0.05em;">// REAL_NAME</span>
+                        <span id="pRealName" style="color: var(--text-primary);">-</span>
+                    </div>
+                    <div class="profile-row" style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border-line); font-family: var(--font-mono); font-size: 13px;">
+                        <span style="color: var(--text-tertiary); letter-spacing: 0.05em;">// ROLE</span>
+                        <span id="pRole">-</span>
+                    </div>
+                    <div class="profile-row" style="display: flex; justify-content: space-between; padding: 12px 0; font-family: var(--font-mono); font-size: 13px;">
+                        <span style="color: var(--text-tertiary); letter-spacing: 0.05em;">// CREATE_TIME</span>
+                        <span id="pCreateTime" style="color: var(--text-primary);">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 修改密码卡 -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>修改密码</h3>
+                </div>
+                <div style="padding: 20px;">
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); letter-spacing: 0.05em; text-transform: uppercase;">原密码</label>
+                        <input type="password" id="oldPassword" style="width: 100%; padding: 8px 12px; background: var(--bg-base); border: 1px solid var(--border-line); border-radius: 2px; color: var(--text-primary); font-family: var(--font-mono); font-size: 13px;" placeholder="enter old password">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); letter-spacing: 0.05em; text-transform: uppercase;">新密码</label>
+                        <input type="password" id="newPassword" style="width: 100%; padding: 8px 12px; background: var(--bg-base); border: 1px solid var(--border-line); border-radius: 2px; color: var(--text-primary); font-family: var(--font-mono); font-size: 13px;" placeholder="enter new password">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); letter-spacing: 0.05em; text-transform: uppercase;">确认新密码</label>
+                        <input type="password" id="confirmNewPassword" style="width: 100%; padding: 8px 12px; background: var(--bg-base); border: 1px solid var(--border-line); border-radius: 2px; color: var(--text-primary); font-family: var(--font-mono); font-size: 13px;" placeholder="confirm new password">
+                    </div>
+                    <button class="btn btn-primary" onclick="changePassword()" style="width: 100%;">确认修改</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="js/jquery-3.7.0.min.js"></script>
+    <script>
+        var currentUser = null;
+        var userStr = sessionStorage.getItem('user');
+        if (!userStr) {
+            alert('请先登录');
+            window.location.href = 'index.html';
+        } else {
+            currentUser = JSON.parse(userStr);
+            $('#currentUser').text(currentUser.realName || currentUser.username);
+            $('#pUsername').text(currentUser.username);
+            $('#pRealName').text(currentUser.realName || '-');
+            var roleTag = currentUser.role === 'admin'
+                ? '<span class="tag tag-in">ADMIN</span>'
+                : '<span class="tag tag-low">OPERATOR</span>';
+            $('#pRole').html(roleTag);
+            $('#pCreateTime').text(currentUser.createTime || '-');
+        }
+
+        function changePassword() {
+            var oldPwd = $('#oldPassword').val();
+            var newPwd = $('#newPassword').val();
+            var confirmPwd = $('#confirmNewPassword').val();
+
+            if (!oldPwd || !newPwd) { alert('请填写原密码和新密码'); return; }
+            if (newPwd !== confirmPwd) { alert('两次新密码不一致'); return; }
+            if (newPwd === oldPwd) { alert('新密码不能与原密码相同'); return; }
+
+            $.ajax({
+                url: 'user?action=changepwd',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    id: currentUser.id,
+                    oldPassword: oldPwd,
+                    newPassword: newPwd
+                }),
+                success: function(res) {
+                    if (res.code === 200) {
+                        alert('密码修改成功，请重新登录');
+                        sessionStorage.removeItem('user');
+                        window.location.href = 'logout';
+                    } else {
+                        alert(res.msg || '修改失败');
+                    }
+                },
+                error: function() { alert('服务器连接失败'); }
+            });
+        }
+    </script>
+</body>
+</html>

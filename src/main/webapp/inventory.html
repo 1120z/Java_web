@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>航空电子元件库存管理系统 - 出入库管理</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <h2>航材库存管理</h2>
+        <a href="dashboard.html">首页</a>
+        <a href="components.html">元件管理</a>
+        <a href="inventory.html" class="active">出入库管理</a>
+        <a href="categories.html?v=20260716-2">分类管理</a>
+        <a href="suppliers.html">供应商管理</a>
+        <a href="profile.html">个人中心</a>
+        <span class="user-info">欢迎, <span id="currentUser">管理员</span> | <a href="logout">退出</a></span>
+    </nav>
+
+    <div class="main-content">
+        <!-- 筛选面板 -->
+        <div class="panel" style="margin-bottom: 16px;">
+            <div class="panel-header">
+                <h3>记录筛选</h3>
+                <span class="panel-meta">// FILTER</span>
+            </div>
+            <div style="padding: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                <select id="filterComponent" style="min-width: 200px;">
+                    <option value="">全部元件</option>
+                </select>
+                <select id="filterType" style="min-width: 120px;">
+                    <option value="">全部类型</option>
+                    <option value="in">入库</option>
+                    <option value="out">出库</option>
+                </select>
+                <input type="date" id="filterStartDate" style="min-width: 140px;">
+                <span style="color: var(--text-tertiary); font-family: var(--font-mono); font-size: 12px;">至</span>
+                <input type="date" id="filterEndDate" style="min-width: 140px;">
+                <button class="btn btn-primary btn-sm" onclick="searchRecords()">查询</button>
+                <button class="btn btn-cancel btn-sm" onclick="resetFilter()">重置</button>
+            </div>
+        </div>
+
+        <!-- 记录列表 -->
+        <div class="panel">
+            <div class="panel-header">
+                <h3>出入库记录</h3>
+                <div class="panel-toolbar">
+                    <button class="btn btn-success btn-sm" onclick="showRecordModal('in')">+ 入库</button>
+                    <button class="btn btn-warning btn-sm" onclick="showRecordModal('out')">+ 出库</button>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>时间</th><th>元件编号</th><th>元件名称</th><th>类型</th><th>数量</th><th>操作人</th><th>备注</th></tr>
+                </thead>
+                <tbody id="recordBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 出入库弹窗 -->
+    <div class="modal-overlay" id="recordModal">
+        <div class="modal">
+            <h3 id="recordTitle">入库操作</h3>
+            <input type="hidden" id="recordType" value="in">
+            <div class="form-group"><label>选择元件 *</label><select id="recordComponentId"></select></div>
+            <div class="form-group"><label>数量 *</label><input type="number" id="recordQuantity" min="1" value="1"></div>
+            <div class="form-group"><label>操作人</label><input type="text" id="recordOperator"></div>
+            <div class="form-group"><label>备注</label><textarea id="recordRemark" placeholder="如: 采购入库 / 领用出库"></textarea></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeRecordModal()">取消</button>
+                <button class="btn btn-primary" id="recordSubmitBtn" onclick="saveRecord()">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/jquery-3.7.0.min.js"></script>
+    <script>
+        var user = sessionStorage.getItem('user');
+        if (user) {
+            var u = JSON.parse(user);
+            $('#currentUser').text(u.realName || u.username);
+            $('#recordOperator').val(u.realName || u.username);
+        }
+
+        function escapeHtml(value) {
+            return $('<div>').text(value == null ? '' : String(value)).html();
+        }
+
+        function renderRecords(list) {
+            var html = '';
+            for (var i = 0; i < list.length; i++) {
+                var r = list[i];
+                var tagClass = r.type === 'in' ? 'tag-in' : 'tag-out';
+                var tagText = r.type === 'in' ? '入库' : '出库';
+                html += '<tr><td>' + escapeHtml(r.createTime || '') + '</td><td>' + escapeHtml(r.partNumber || '') + '</td>'
+                    + '<td>' + escapeHtml(r.componentName || '') + '</td>'
+                    + '<td><span class="tag ' + tagClass + '">' + tagText + '</span></td>'
+                    + '<td>' + escapeHtml(r.quantity) + '</td><td>' + escapeHtml(r.operator || '') + '</td>'
+                    + '<td>' + escapeHtml(r.remark || '') + '</td></tr>';
+            }
+            $('#recordBody').html(html);
+        }
+
+        function loadRecords() {
+            $.ajax({
+                url: 'record?action=list',
+                method: 'GET',
+                dataType: 'json',
+                cache: false
+            }).done(function(res) {
+                if (res.code === 200) {
+                    renderRecords(res.data || []);
+                }
+            });
+        }
+
+        function loadComponentOptions() {
+            $.ajax({
+                url: 'component?action=list',
+                method: 'GET',
+                dataType: 'json',
+                cache: false
+            }).done(function(res) {
+                if (res.code === 200) {
+                    var html = '<option value="">-- 请选择元件 --</option>';
+                    var filterHtml = '<option value="">全部元件</option>';
+                    for (var i = 0; i < res.data.length; i++) {
+                        var c = res.data[i];
+                        html += '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.partNumber) + ' - '
+                            + escapeHtml(c.name) + ' (库存:' + escapeHtml(c.stockQuantity) + ')</option>';
+                        filterHtml += '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.partNumber)
+                            + ' - ' + escapeHtml(c.name) + '</option>';
+                    }
+                    $('#recordComponentId').html(html);
+                    $('#filterComponent').html(filterHtml);
+                }
+            });
+        }
+
+        function showRecordModal(type) {
+            $('#recordType').val(type);
+            $('#recordTitle').text(type === 'in' ? '入库操作' : '出库操作');
+            $('#recordQuantity').val(1);
+            $('#recordRemark').val('');
+            loadComponentOptions();
+            $('#recordModal').addClass('show');
+        }
+
+        function closeRecordModal() { $('#recordModal').removeClass('show'); }
+
+        var recordSaving = false;
+
+        function saveRecord() {
+            if (recordSaving) { return; }
+            var componentId = $('#recordComponentId').val();
+            var quantity = parseInt($('#recordQuantity').val());
+            if (!componentId) { alert('请选择元件'); return; }
+            if (!quantity || quantity <= 0) { alert('数量必须大于0'); return; }
+
+            var data = {
+                componentId: parseInt(componentId),
+                type: $('#recordType').val(),
+                quantity: quantity,
+                operator: $('#recordOperator').val().trim(),
+                remark: $('#recordRemark').val().trim()
+            };
+
+            recordSaving = true;
+            $('#recordSubmitBtn').prop('disabled', true).text('处理中...');
+
+            $.ajax({
+                url: 'record?action=add',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                processData: false,
+                success: function(res) {
+                    if (res.code === 200) {
+                        closeRecordModal();
+                        loadRecords();
+                        loadComponentOptions();
+                        alert('操作成功，当前库存：' + res.stockQuantity);
+                    } else {
+                        alert(res.msg || '操作失败');
+                    }
+                },
+                error: function() {
+                    alert('服务器连接失败，请稍后重试');
+                },
+                complete: function() {
+                    recordSaving = false;
+                    $('#recordSubmitBtn').prop('disabled', false).text('确认');
+                }
+            });
+        }
+
+        loadRecords();
+        loadComponentOptions();
+
+        function searchRecords() {
+            var componentId = $('#filterComponent').val();
+            var type = $('#filterType').val();
+            var startDate = $('#filterStartDate').val();
+            var endDate = $('#filterEndDate').val();
+            var params = [];
+            if (componentId) params.push('componentId=' + componentId);
+            if (type) params.push('type=' + type);
+            if (startDate) params.push('startDate=' + startDate);
+            if (endDate) params.push('endDate=' + endDate);
+            var query = params.length ? '&' + params.join('&') : '';
+            $.ajax({
+                url: 'record?action=search' + query,
+                method: 'GET',
+                dataType: 'json',
+                cache: false
+            }).done(function(res) {
+                if (res.code === 200) {
+                    renderRecords(res.data || []);
+                }
+            });
+        }
+
+        function resetFilter() {
+            $('#filterComponent').val('');
+            $('#filterType').val('');
+            $('#filterStartDate').val('');
+            $('#filterEndDate').val('');
+            loadRecords();
+        }
+    </script>
+</body>
+</html>

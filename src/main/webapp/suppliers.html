@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>航空电子元件库存管理系统 - 供应商管理</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <h2>航材库存管理</h2>
+        <a href="dashboard.html">首页</a>
+        <a href="components.html">元件管理</a>
+        <a href="inventory.html">出入库管理</a>
+        <a href="categories.html?v=20260716-2">分类管理</a>
+        <a href="suppliers.html" class="active">供应商管理</a>
+        <a href="profile.html">个人中心</a>
+        <span class="user-info">欢迎, <span id="currentUser">管理员</span> | <a href="logout">退出</a></span>
+    </nav>
+
+    <div class="main-content">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>供应商列表</h3>
+                <div class="panel-toolbar">
+                    <input type="text" id="searchInput" placeholder="搜索编号/名称/联系人..." style="min-width: 200px;">
+                    <select id="filterLevel" style="min-width: 120px;">
+                        <option value="">全部等级</option>
+                        <option value="qualified">合格</option>
+                        <option value="pending">待评估</option>
+                        <option value="blacklist">黑名单</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm" onclick="searchSuppliers()">查询</button>
+                    <button class="btn btn-cancel btn-sm" onclick="resetFilter()">重置</button>
+                    <button class="btn btn-success btn-sm" onclick="showAddModal()">+ 新增供应商</button>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>编号</th>
+                        <th>供应商名称</th>
+                        <th>联系人</th>
+                        <th>电话</th>
+                        <th>等级</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="supplierBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 新增/编辑弹窗 -->
+    <div class="modal-overlay" id="supplierModal">
+        <div class="modal">
+            <h3 id="modalTitle">新增供应商</h3>
+            <input type="hidden" id="editId">
+            <div class="form-group"><label>供应商编号 *</label><input type="text" id="supplierCode" placeholder="如: SUP-009"></div>
+            <div class="form-group"><label>供应商名称 *</label><input type="text" id="name" placeholder="如: 中航电子有限公司"></div>
+            <div class="form-group"><label>联系人</label><input type="text" id="contactPerson" placeholder="如: 王建国"></div>
+            <div class="form-group"><label>联系电话</label><input type="text" id="phone" placeholder="如: 010-88561234"></div>
+            <div class="form-group"><label>邮箱</label><input type="text" id="email" placeholder="如: sales@example.com"></div>
+            <div class="form-group"><label>地址</label><input type="text" id="address" placeholder="如: 北京市海淀区..."></div>
+            <div class="form-group">
+                <label>等级</label>
+                <select id="level">
+                    <option value="qualified">合格</option>
+                    <option value="pending">待评估</option>
+                    <option value="blacklist">黑名单</option>
+                </select>
+            </div>
+            <div class="form-group"><label>备注</label><textarea id="remark"></textarea></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" id="supplierSubmitBtn" onclick="saveSupplier()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 供应商元件详情弹窗 -->
+    <div class="modal-overlay" id="componentsModal">
+        <div class="modal">
+            <h3>该供应商供应的元件</h3>
+            <table>
+                <thead><tr><th>编号</th><th>名称</th><th>厂家</th><th>库存</th><th>预警值</th></tr></thead>
+                <tbody id="supplierComponentsBody"></tbody>
+            </table>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeComponentsModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/jquery-3.7.0.min.js"></script>
+    <script>
+        var userStr = sessionStorage.getItem('user');
+        if (!userStr) {
+            window.location.href = 'index.html';
+        } else {
+            var user = JSON.parse(userStr);
+            $('#currentUser').text(user.realName || user.username);
+        }
+
+        function escapeHtml(value) {
+            return $('<div>').text(value == null ? '' : String(value)).html();
+        }
+
+        function levelTag(level) {
+            if (level === 'qualified') return '<span class="tag tag-ok">合格</span>';
+            if (level === 'pending') return '<span class="tag tag-low">待评估</span>';
+            if (level === 'blacklist') return '<span class="tag tag-out">黑名单</span>';
+            return '<span class="tag">' + escapeHtml(level || '-') + '</span>';
+        }
+
+        function renderTable(list) {
+            var html = '';
+            for (var i = 0; i < list.length; i++) {
+                var s = list[i];
+                html += '<tr><td class="mono">' + escapeHtml(s.supplierCode) + '</td>'
+                    + '<td>' + escapeHtml(s.name) + '</td>'
+                    + '<td>' + escapeHtml(s.contactPerson || '-') + '</td>'
+                    + '<td class="mono">' + escapeHtml(s.phone || '-') + '</td>'
+                    + '<td>' + levelTag(s.level) + '</td>'
+                    + '<td>' + escapeHtml(s.createTime || '') + '</td>'
+                    + '<td><button class="btn btn-primary btn-sm js-view-components" data-id="' + escapeHtml(s.id) + '">查看元件</button> '
+                    + '<button class="btn btn-primary btn-sm js-edit-supplier" data-id="' + escapeHtml(s.id) + '">编辑</button> '
+                    + '<button class="btn btn-danger btn-sm js-delete-supplier" data-id="' + escapeHtml(s.id)
+                    + '">删除</button></td></tr>';
+            }
+            $('#supplierBody').html(html);
+        }
+
+        function loadSuppliers() {
+            $.get('supplier?action=list', function(res) {
+                if (res.code === 200) { renderTable(res.data); }
+            });
+        }
+
+        function searchSuppliers() {
+            var keyword = $('#searchInput').val().trim();
+            var level = $('#filterLevel').val();
+            var params = [];
+            if (keyword) params.push('keyword=' + encodeURIComponent(keyword));
+            if (level) params.push('level=' + level);
+            var query = params.length ? '&' + params.join('&') : '';
+            $.get('supplier?action=search' + query, function(res) {
+                if (res.code === 200) { renderTable(res.data); }
+            });
+        }
+
+        function resetFilter() {
+            $('#searchInput').val('');
+            $('#filterLevel').val('');
+            loadSuppliers();
+        }
+
+        function showAddModal() {
+            $('#modalTitle').text('新增供应商');
+            $('#editId').val('');
+            $('#supplierCode,#name,#contactPerson,#phone,#email,#address,#remark').val('');
+            $('#level').val('qualified');
+            $('#supplierModal').addClass('show');
+        }
+
+        function editSupplier(id) {
+            $.get('supplier?action=detail&id=' + id, function(res) {
+                if (res.code === 200) {
+                    var s = res.data;
+                    $('#modalTitle').text('编辑供应商');
+                    $('#editId').val(s.id);
+                    $('#supplierCode').val(s.supplierCode);
+                    $('#name').val(s.name);
+                    $('#contactPerson').val(s.contactPerson);
+                    $('#phone').val(s.phone);
+                    $('#email').val(s.email);
+                    $('#address').val(s.address);
+                    $('#level').val(s.level);
+                    $('#remark').val(s.remark);
+                    $('#supplierModal').addClass('show');
+                }
+            });
+        }
+
+        function closeModal() { $('#supplierModal').removeClass('show'); }
+
+        var supplierSaving = false;
+
+        function saveSupplier() {
+            if (supplierSaving) { return; }
+            var data = {
+                supplierCode: $('#supplierCode').val().trim(),
+                name: $('#name').val().trim(),
+                contactPerson: $('#contactPerson').val().trim(),
+                phone: $('#phone').val().trim(),
+                email: $('#email').val().trim(),
+                address: $('#address').val().trim(),
+                level: $('#level').val(),
+                remark: $('#remark').val().trim()
+            };
+            if (!data.supplierCode || !data.name) { alert('编号和名称为必填项'); return; }
+
+            var editId = $('#editId').val();
+            if (editId) { data.id = parseInt(editId); }
+            var action = editId ? 'update' : 'add';
+            supplierSaving = true;
+            $('#supplierSubmitBtn').prop('disabled', true).text('保存中...');
+
+            $.ajax({
+                url: 'supplier?action=' + action,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                processData: false,
+                success: function(res) {
+                    if (res.code === 200) { closeModal(); loadSuppliers(); alert('保存成功'); }
+                    else { alert(res.msg || '保存失败'); }
+                },
+                complete: function() {
+                    supplierSaving = false;
+                    $('#supplierSubmitBtn').prop('disabled', false).text('保存');
+                }
+            });
+        }
+
+        function deleteSupplier(id, name) {
+            if (!confirm('确定删除供应商【' + name + '】吗？\n注意: 该供应商下的元件不会删除，但供应商字段会置空。')) return;
+            $.get('supplier?action=delete&id=' + id, function(res) {
+                if (res.code === 200) { loadSuppliers(); alert('删除成功'); }
+                else { alert(res.msg || '删除失败'); }
+            });
+        }
+
+        function viewComponents(id) {
+            $.get('supplier?action=components&id=' + id, function(res) {
+                if (res.code === 200) {
+                    var list = res.data || [];
+                    var html = '';
+                    if (list.length === 0) {
+                        html = '<tr><td colspan="5" style="text-align: center; color: var(--text-tertiary); padding: 24px;">// 该供应商暂无关联元件</td></tr>';
+                    } else {
+                        for (var i = 0; i < list.length; i++) {
+                            var c = list[i];
+                            html += '<tr><td class="mono">' + escapeHtml(c.partNumber) + '</td>'
+                                + '<td>' + escapeHtml(c.name) + '</td>'
+                                + '<td>' + escapeHtml(c.manufacturer || '-') + '</td>'
+                                + '<td class="mono">' + escapeHtml(c.stockQuantity) + '</td>'
+                                + '<td class="mono">' + escapeHtml(c.minStock) + '</td></tr>';
+                        }
+                    }
+                    $('#supplierComponentsBody').html(html);
+                    $('#componentsModal').addClass('show');
+                }
+            });
+        }
+
+        function closeComponentsModal() { $('#componentsModal').removeClass('show'); }
+
+        $('#supplierBody').on('click', '.js-view-components', function() {
+            viewComponents($(this).attr('data-id'));
+        });
+        $('#supplierBody').on('click', '.js-edit-supplier', function() {
+            editSupplier($(this).attr('data-id'));
+        });
+        $('#supplierBody').on('click', '.js-delete-supplier', function() {
+            var name = $(this).closest('tr').children('td').eq(1).text();
+            deleteSupplier($(this).attr('data-id'), name);
+        });
+
+        loadSuppliers();
+    </script>
+</body>
+</html>

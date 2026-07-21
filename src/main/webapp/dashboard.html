@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>航空电子元件库存管理系统 - 仪表盘</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <h2>航材库存管理</h2>
+        <a href="dashboard.html" class="active">首页</a>
+        <a href="components.html">元件管理</a>
+        <a href="inventory.html">出入库管理</a>
+        <a href="categories.html?v=20260716-2">分类管理</a>
+        <a href="suppliers.html">供应商管理</a>
+        <a href="profile.html">个人中心</a>
+        <span class="user-info">欢迎, <span id="currentUser">管理员</span> | <a href="logout">退出</a></span>
+    </nav>
+
+    <div class="dash-container">
+
+        <!-- ============ HERO 标题区 ============ -->
+        <header class="dash-hero reveal">
+            <div class="hero-meta">
+                <span class="hero-label">// AVIATION INVENTORY</span>
+                <span class="hero-label">// DASHBOARD v1.0</span>
+                <span class="hero-label" id="heroDate">// LOADING...</span>
+            </div>
+
+            <h1 class="hero-title-xl">
+                Inventory<span class="period">.</span>
+            </h1>
+
+            <p class="hero-subtitle-typewriter">
+                <span id="typewriter"></span><span class="cursor">_</span>
+            </p>
+
+            <div class="hero-decoration">
+                <span class="deco-line"></span>
+                <span class="deco-text">SYSTEM ONLINE</span>
+                <span class="deco-line"></span>
+            </div>
+        </header>
+
+        <!-- ============ 大数字指标区 ============ -->
+        <section class="big-numbers">
+            <div class="big-num reveal" data-label="元件种类总数">
+                <div class="num-label">元件种类总数</div>
+                <div class="num-value" id="totalCount">0</div>
+                <div class="num-suffix">TYPES</div>
+            </div>
+            <div class="big-num reveal" data-label="库存总量">
+                <div class="num-label">库存总量</div>
+                <div class="num-value" id="totalStock">0</div>
+                <div class="num-suffix">UNITS</div>
+            </div>
+            <div class="big-num warning reveal" data-label="低库存预警">
+                <div class="num-label">低库存预警</div>
+                <div class="num-value" id="lowStockCount">0</div>
+                <div class="num-suffix">ALERT</div>
+            </div>
+            <div class="big-num reveal" data-label="元件分类数">
+                <div class="num-label">元件分类数</div>
+                <div class="num-value" id="categoryCount">0</div>
+                <div class="num-suffix">CATS</div>
+            </div>
+        </section>
+
+        <!-- ============ 图表区 ============ -->
+        <section class="charts-grid">
+            <div class="chart-panel reveal">
+                <div class="chart-header">
+                    <h3 class="chart-title"><span class="bracket">[</span>元件分类占比<span class="bracket">]</span></h3>
+                    <span class="chart-meta">// DONUT</span>
+                </div>
+                <div class="chart-body">
+                    <div id="categoryChart" style="width: 100%; height: 320px;"></div>
+                </div>
+            </div>
+
+            <div class="chart-panel reveal">
+                <div class="chart-header">
+                    <h3 class="chart-title"><span class="bracket">[</span>近7天出入库趋势<span class="bracket">]</span></h3>
+                    <span class="chart-meta">// LINE</span>
+                </div>
+                <div class="chart-body">
+                    <div id="trendChart" style="width: 100%; height: 320px;"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ 表格区 ============ -->
+        <section class="dash-tables">
+            <div class="panel reveal" id="lowStockPanel" style="display:none;">
+                <div class="panel-header">
+                    <h3>低库存预警</h3>
+                    <span class="panel-meta">// ATTENTION REQUIRED</span>
+                </div>
+                <table>
+                    <thead><tr><th>编号</th><th>名称</th><th>当前库存</th><th>预警值</th><th>状态</th></tr></thead>
+                    <tbody id="lowStockBody"></tbody>
+                </table>
+            </div>
+
+            <div class="panel reveal">
+                <div class="panel-header">
+                    <h3>最近出入库记录</h3>
+                    <span class="panel-meta">// LATEST 10</span>
+                </div>
+                <table>
+                    <thead><tr><th>时间</th><th>编号</th><th>名称</th><th>类型</th><th>数量</th><th>操作人</th><th>备注</th></tr></thead>
+                    <tbody id="recentRecords"></tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <script src="js/jquery-3.7.0.min.js"></script>
+    <script src="js/echarts.min.js"></script>
+    <script>
+        // 当前用户
+        var userStr = sessionStorage.getItem('user');
+        if (!userStr) {
+            window.location.href = 'index.html';
+        } else {
+            var u = JSON.parse(userStr);
+            $('#currentUser').text(u.realName || u.username);
+        }
+
+        // 打字机效果
+        var subtitleText = 'Aviation Electronic Components Inventory Management / 航空电子元件库存管理平台';
+        var twIdx = 0;
+        function typeWriter() {
+            if (twIdx < subtitleText.length) {
+                $('#typewriter').text(subtitleText.substring(0, twIdx + 1));
+                twIdx++;
+                setTimeout(typeWriter, 45);
+            } else {
+                // 完成后光标持续闪烁（CSS 已处理）
+            }
+        }
+        setTimeout(typeWriter, 400);
+
+        // 显示日期
+        var now = new Date();
+        var dateStr = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0');
+        $('#heroDate').text('// ' + dateStr);
+
+        // 大数字滚动动画
+        var numberTimers = {};
+        function animateNumber(selector, target) {
+            var $el = $(selector);
+            target = Number(target) || 0;
+            var current = Number($el.text()) || 0;
+            var distance = target - current;
+
+            if (numberTimers[selector]) {
+                clearInterval(numberTimers[selector]);
+            }
+            if (distance === 0) {
+                $el.text(target);
+                return;
+            }
+
+            var step = distance / 20;
+            var frame = 0;
+            numberTimers[selector] = setInterval(function() {
+                frame++;
+                if (frame >= 20) {
+                    $el.text(target);
+                    clearInterval(numberTimers[selector]);
+                    delete numberTimers[selector];
+                    return;
+                }
+                $el.text(Math.round(current + step * frame));
+            }, 30);
+        }
+
+        var dashboardRequest = null;
+        var dashboardRequestId = 0;
+        var categoryChart = null;
+        var trendChart = null;
+
+        function escapeHtml(value) {
+            return $('<div>').text(value == null ? '' : String(value)).html();
+        }
+
+        // 加载仪表盘数据。每次只保留最新请求，避免快速切换页面时旧响应覆盖新数据。
+        function loadDashboardData() {
+            var requestId = ++dashboardRequestId;
+            if (dashboardRequest) {
+                dashboardRequest.abort();
+            }
+
+            dashboardRequest = $.ajax({
+                url: 'dashboard',
+                method: 'GET',
+                dataType: 'json',
+                cache: false
+            }).done(function(res) {
+                if (requestId !== dashboardRequestId || res.code !== 200) { return; }
+                var d = res.data;
+                var stats = d.statistics;
+
+                // 大数字滚动
+                animateNumber('#totalCount', stats.totalCount || 0);
+                animateNumber('#totalStock', stats.totalStock || 0);
+                animateNumber('#lowStockCount', stats.lowStockCount || 0);
+                animateNumber('#categoryCount', stats.categoryCount || 0);
+
+                // 渲染环形图
+                renderCategoryChart(d.categoryStats || []);
+                // 渲染折线图
+                renderTrendChart(d.trend7d || []);
+
+                // 低库存预警
+                var lowStockList = d.lowStockList || [];
+                var html = '';
+                for (var i = 0; i < lowStockList.length; i++) {
+                    var c = lowStockList[i];
+                    html += '<tr><td class="mono">' + escapeHtml(c.partNumber) + '</td><td>' + escapeHtml(c.name) + '</td>'
+                        + '<td class="mono">' + escapeHtml(c.stockQuantity) + '</td><td class="mono">' + escapeHtml(c.minStock) + '</td>'
+                        + '<td><span class="tag tag-low">库存不足</span></td></tr>';
+                }
+                $('#lowStockBody').html(html);
+                $('#lowStockPanel').toggle(lowStockList.length > 0);
+
+                // 最近记录
+                var records = d.recentRecords || [];
+                var rhtml = '';
+                var limit = Math.min(records.length, 10);
+                for (var j = 0; j < limit; j++) {
+                    var r = records[j];
+                    var tagClass = r.type === 'in' ? 'tag-in' : 'tag-out';
+                    var tagText = r.type === 'in' ? '入库' : '出库';
+                    rhtml += '<tr><td>' + escapeHtml(r.createTime) + '</td><td class="mono">' + escapeHtml(r.partNumber) + '</td>'
+                        + '<td>' + escapeHtml(r.componentName) + '</td>'
+                        + '<td><span class="tag ' + tagClass + '">' + tagText + '</span></td>'
+                        + '<td class="mono">' + escapeHtml(r.quantity) + '</td><td>' + escapeHtml(r.operator) + '</td>'
+                        + '<td>' + escapeHtml(r.remark) + '</td></tr>';
+                }
+                $('#recentRecords').html(rhtml);
+            }).always(function() {
+                if (requestId === dashboardRequestId) {
+                    dashboardRequest = null;
+                }
+            });
+        }
+
+        loadDashboardData();
+
+        // 浏览器后退/前进可能直接恢复旧页面；从其他标签切回来时也重新获取最新库存。
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                loadDashboardData();
+            }
+        });
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                loadDashboardData();
+            }
+        });
+
+        // 环形图: 元件分类占比
+        function renderCategoryChart(data) {
+            var chartElement = document.getElementById('categoryChart');
+            categoryChart = echarts.getInstanceByDom(chartElement) || echarts.init(chartElement);
+            categoryChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    renderMode: 'richText',
+                    backgroundColor: 'rgba(13, 17, 23, 0.95)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1,
+                    textStyle: { color: '#fafafa', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }
+                },
+                legend: {
+                    type: 'scroll',
+                    orient: 'vertical',
+                    right: 10,
+                    top: 'center',
+                    textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+                    pageTextStyle: { color: '#94a3b8' }
+                },
+                series: [{
+                    name: '元件分类',
+                    type: 'pie',
+                    radius: ['45%', '75%'],
+                    center: ['38%', '50%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderColor: '#0d1117',
+                        borderWidth: 2
+                    },
+                    label: { show: false },
+                    labelLine: { show: false },
+                    emphasis: {
+                        label: {
+                            show: true,
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: '#fafafa',
+                            fontFamily: 'Space Grotesk, sans-serif',
+                            formatter: '{b}\n{c} 件'
+                        },
+                        itemStyle: {
+                            shadowBlur: 20,
+                            shadowColor: 'rgba(59, 130, 246, 0.5)'
+                        }
+                    },
+                    data: data,
+                    color: ['#3b82f6', '#60a5fa', '#f59e0b', '#10b981', '#ef4444', '#a78bfa', '#06b6d4', '#ec4899']
+                }]
+            }, true);
+        }
+
+        // 折线图: 近7天出入库趋势
+        function renderTrendChart(data) {
+            var chartElement = document.getElementById('trendChart');
+            trendChart = echarts.getInstanceByDom(chartElement) || echarts.init(chartElement);
+            var dates = data.map(function(d) { return d.date; });
+            var inData = data.map(function(d) { return d.inTotal; });
+            var outData = data.map(function(d) { return d.outTotal; });
+            trendChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    renderMode: 'richText',
+                    backgroundColor: 'rgba(13, 17, 23, 0.95)',
+                    borderColor: '#3b82f6',
+                    borderWidth: 1,
+                    textStyle: { color: '#fafafa', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }
+                },
+                legend: {
+                    data: ['入库', '出库'],
+                    textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+                    top: 0,
+                    right: 10
+                },
+                grid: { left: 50, right: 20, top: 40, bottom: 40 },
+                xAxis: {
+                    type: 'category',
+                    data: dates,
+                    axisLine: { lineStyle: { color: '#30363d' } },
+                    axisLabel: { color: '#64748b', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+                    axisTick: { show: false }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: { show: false },
+                    axisLabel: { color: '#64748b', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 },
+                    splitLine: { lineStyle: { color: 'rgba(48, 54, 61, 0.5)', type: 'dashed' } }
+                },
+                series: [
+                    {
+                        name: '入库',
+                        type: 'line',
+                        data: inData,
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        lineStyle: { color: '#10b981', width: 2 },
+                        itemStyle: { color: '#10b981', borderColor: '#0d1117', borderWidth: 2 },
+                        areaStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(16, 185, 129, 0.3)' },
+                                    { offset: 1, color: 'rgba(16, 185, 129, 0)' }
+                                ]
+                            }
+                        }
+                    },
+                    {
+                        name: '出库',
+                        type: 'line',
+                        data: outData,
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        lineStyle: { color: '#ef4444', width: 2 },
+                        itemStyle: { color: '#ef4444', borderColor: '#0d1117', borderWidth: 2 },
+                        areaStyle: {
+                            color: {
+                                type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                colorStops: [
+                                    { offset: 0, color: 'rgba(239, 68, 68, 0.3)' },
+                                    { offset: 1, color: 'rgba(239, 68, 68, 0)' }
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }, true);
+        }
+
+        window.addEventListener('resize', function() {
+            if (categoryChart) { categoryChart.resize(); }
+            if (trendChart) { trendChart.resize(); }
+        });
+    </script>
+</body>
+</html>

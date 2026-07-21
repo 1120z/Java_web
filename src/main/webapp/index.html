@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>航空电子元件库存管理系统 - 登录</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="login-body">
+
+    <!-- 左侧 Hero -->
+    <div class="login-hero">
+        <div class="hero-codes">
+            AVS-001 / 高精度气压传感器<br>
+            AVS-002 / 三轴陀螺仪传感器<br>
+            AVC-001 / 圆形航空插头<br>
+            AVB-001 / 飞控计算机主板<br>
+            AVW-001 / 屏蔽双绞线<br>
+            AVI-001 / 多功能飞行显示器<br>
+            AVP-001 / 28V直流电源模块
+        </div>
+
+        <span class="hero-tag">AVIATION // INVENTORY // v1.0</span>
+
+        <h1 class="hero-title">
+            Aviation
+            <span class="accent">Inventory.</span>
+        </h1>
+
+        <p class="hero-subtitle">
+            航空电子元件库存管理系统<br>
+            Aviation Electronic Components<br>
+            Inventory Management Platform
+        </p>
+
+        <div class="hero-stats">
+            <div class="hero-stat">
+                <span class="hero-stat-value">12</span>
+                <span class="hero-stat-label">元件种类</span>
+            </div>
+            <div class="hero-stat">
+                <span class="hero-stat-value">6</span>
+                <span class="hero-stat-label">分类模块</span>
+            </div>
+            <div class="hero-stat">
+                <span class="hero-stat-value">4</span>
+                <span class="hero-stat-label">出入库记录</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧登录卡 -->
+    <div class="login-form-side">
+        <div class="login-container with-corners">
+            <div class="login-header">
+                <span class="label">// ACCESS CONTROL</span>
+                <h1>系统登录</h1>
+                <p>Authorized Personnel Only</p>
+            </div>
+
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="username">用户名 / Username</label>
+                    <input type="text" id="username" placeholder="enter username" autocomplete="off" required>
+                    <span class="error-message"></span>
+                </div>
+                <div class="form-group">
+                    <label for="password">密码 / Password</label>
+                    <input type="password" id="password" placeholder="enter password" required>
+                    <span class="error-message"></span>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">认 证 登 录</button>
+                <p class="login-hint">默认账号: <code>admin</code> / <code>admin123</code></p>
+                <p class="login-hint">没有账号？<a href="register.html" style="color: var(--accent-cobalt-bright); text-decoration: none;">立即注册 →</a></p>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/jquery-3.7.0.min.js"></script>
+    <script>
+        $(function() {
+            $('#loginForm').on('submit', function(e) {
+                e.preventDefault();
+                var username = $('#username').val().trim();
+                var password = $('#password').val().trim();
+
+                if (!username || !password) {
+                    alert('请输入用户名和密码');
+                    return;
+                }
+
+                $.ajax({
+                    url: 'login',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ username: username, password: password }),
+                    success: function(res) {
+                        if (res.code === 200) {
+                            window.sessionStorage && sessionStorage.setItem('user', JSON.stringify(res.data));
+                            window.location.href = 'dashboard.html';
+                        } else {
+                            alert(res.msg || '登录失败');
+                        }
+                    },
+                    error: function() {
+                        alert('服务器连接失败，请检查服务是否启动');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>航空电子元件库存管理系统 - 元件管理</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <h2>航材库存管理</h2>
+        <a href="dashboard.html">首页</a>
+        <a href="components.html" class="active">元件管理</a>
+        <a href="inventory.html">出入库管理</a>
+        <a href="categories.html?v=20260716-2">分类管理</a>
+        <a href="suppliers.html">供应商管理</a>
+        <a href="profile.html">个人中心</a>
+        <span class="user-info">欢迎, <span id="currentUser">管理员</span> | <a href="logout">退出</a></span>
+    </nav>
+
+    <div class="main-content">
+        <div class="panel">
+            <div class="panel-header">
+                <h3>航空电子元件列表</h3>
+                <div class="panel-toolbar">
+                    <input type="text" id="searchInput" placeholder="搜索编号或名称..." style="min-width: 160px;">
+                    <select id="filterCategory" style="min-width: 130px;">
+                        <option value="">全部分类</option>
+                    </select>
+                    <select id="filterSupplier" style="min-width: 130px;">
+                        <option value="">全部供应商</option>
+                    </select>
+                    <select id="filterStock" style="min-width: 110px;">
+                        <option value="">全部状态</option>
+                        <option value="normal">正常</option>
+                        <option value="low">低库存</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm" onclick="searchComponents()">查询</button>
+                    <button class="btn btn-cancel btn-sm" onclick="resetFilter()">重置</button>
+                    <button class="btn btn-success btn-sm" onclick="showAddModal()">+ 新增元件</button>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr><th>编号</th><th>名称</th><th>分类</th><th>供应商</th><th>厂家</th><th>规格</th><th>库存</th><th>预警值</th><th>位置</th><th>状态</th><th>操作</th></tr>
+                </thead>
+                <tbody id="componentBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 新增/编辑弹窗 -->
+    <div class="modal-overlay" id="componentModal">
+        <div class="modal">
+            <h3 id="modalTitle">新增元件</h3>
+            <input type="hidden" id="editId">
+            <div class="form-group"><label>元件编号 *</label><input type="text" id="partNumber" placeholder="如: AVS-004"></div>
+            <div class="form-group"><label>元件名称 *</label><input type="text" id="name" placeholder="如: 红外温度传感器"></div>
+            <div class="form-group"><label>分类</label><select id="categoryId"></select></div>
+            <div class="form-group"><label>供应商</label><select id="supplierId"><option value="">-- 请选择 --</option></select></div>
+            <div class="form-group"><label>生产厂家</label><input type="text" id="manufacturer"></div>
+            <div class="form-group"><label>规格型号</label><input type="text" id="spec"></div>
+            <div class="form-group"><label>计量单位</label><input type="text" id="unit" value="个"></div>
+            <div class="form-group"><label>库存数量（请通过出入库管理）</label><input type="number" id="stockQuantity" min="0" value="0" disabled title="库存变更会生成流水，请使用出入库管理"></div>
+            <div class="form-group"><label>最低预警值</label><input type="number" id="minStock" value="10"></div>
+            <div class="form-group"><label>存放位置</label><input type="text" id="location" placeholder="如: A区-1排-3架"></div>
+            <div class="form-group"><label>备注</label><textarea id="description"></textarea></div>
+            <div class="modal-actions">
+                <button class="btn btn-cancel" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary" id="componentSubmitBtn" onclick="saveComponent()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/jquery-3.7.0.min.js"></script>
+    <script>
+        var user = sessionStorage.getItem('user');
+        if (user) { $('#currentUser').text(JSON.parse(user).realName || JSON.parse(user).username); }
+
+        function escapeHtml(value) {
+            return $('<div>').text(value == null ? '' : String(value)).html();
+        }
+
+        // 加载分类下拉（用于新增元件表单和筛选表单）
+        function loadCategories() {
+            $.get('category?action=list', function(res) {
+                if (res.code === 200) {
+                    var html = '<option value="">-- 请选择 --</option>';
+                    var filterHtml = '<option value="">全部分类</option>';
+                    for (var i = 0; i < res.data.length; i++) {
+                        html += '<option value="' + escapeHtml(res.data[i].id) + '">' + escapeHtml(res.data[i].name) + '</option>';
+                        filterHtml += '<option value="' + escapeHtml(res.data[i].id) + '">' + escapeHtml(res.data[i].name) + '</option>';
+                    }
+                    $('#categoryId').html(html);
+                    $('#filterCategory').html(filterHtml);
+                }
+            });
+        }
+
+        // 加载供应商下拉（用于新增元件表单和筛选表单）
+        function loadSuppliers() {
+            $.get('supplier?action=list', function(res) {
+                if (res.code === 200) {
+                    var html = '<option value="">-- 请选择 --</option>';
+                    var filterHtml = '<option value="">全部供应商</option>';
+                    for (var i = 0; i < res.data.length; i++) {
+                        html += '<option value="' + escapeHtml(res.data[i].id) + '">' + escapeHtml(res.data[i].supplierCode)
+                            + ' - ' + escapeHtml(res.data[i].name) + '</option>';
+                        filterHtml += '<option value="' + escapeHtml(res.data[i].id) + '">' + escapeHtml(res.data[i].name) + '</option>';
+                    }
+                    $('#supplierId').html(html);
+                    $('#filterSupplier').html(filterHtml);
+                }
+            });
+        }
+
+        // 加载元件列表
+        function loadComponents() {
+            $.get('component?action=list', function(res) {
+                if (res.code === 200) { renderTable(res.data); }
+            });
+        }
+
+        function renderTable(list) {
+            var html = '';
+            for (var i = 0; i < list.length; i++) {
+                var c = list[i];
+                var status = c.stockQuantity < c.minStock
+                    ? '<span class="tag tag-low">库存不足</span>'
+                    : '<span class="tag tag-ok">正常</span>';
+                html += '<tr><td>' + escapeHtml(c.partNumber) + '</td><td>' + escapeHtml(c.name) + '</td>'
+                    + '<td>' + escapeHtml(c.categoryName || '-') + '</td><td>' + escapeHtml(c.supplierName || '-') + '</td>'
+                    + '<td>' + escapeHtml(c.manufacturer || '-') + '</td>'
+                    + '<td>' + escapeHtml(c.spec || '-') + '</td><td>' + escapeHtml(c.stockQuantity) + ' '
+                    + escapeHtml(c.unit || '个') + '</td>'
+                    + '<td>' + escapeHtml(c.minStock) + '</td><td>' + escapeHtml(c.location || '-') + '</td><td>' + status + '</td>'
+                    + '<td><button class="btn btn-primary btn-sm js-edit-component" data-id="' + escapeHtml(c.id) + '">编辑</button> '
+                    + '<button class="btn btn-danger btn-sm js-delete-component" data-id="' + escapeHtml(c.id)
+                    + '">删除</button></td></tr>';
+            }
+            $('#componentBody').html(html);
+        }
+
+        function searchComponents() {
+            var keyword = $('#searchInput').val().trim();
+            var categoryId = $('#filterCategory').val();
+            var supplierId = $('#filterSupplier').val();
+            var stockStatus = $('#filterStock').val();
+            var params = [];
+            if (keyword) params.push('keyword=' + encodeURIComponent(keyword));
+            if (categoryId) params.push('categoryId=' + categoryId);
+            if (supplierId) params.push('supplierId=' + supplierId);
+            if (stockStatus) params.push('stockStatus=' + stockStatus);
+            var query = params.length ? '&' + params.join('&') : '';
+            $.get('component?action=search' + query, function(res) {
+                if (res.code === 200) { renderTable(res.data); }
+            });
+        }
+
+        function resetFilter() {
+            $('#searchInput').val('');
+            $('#filterCategory').val('');
+            $('#filterSupplier').val('');
+            $('#filterStock').val('');
+            loadComponents();
+        }
+
+        function showAddModal() {
+            $('#modalTitle').text('新增元件');
+            $('#editId').val('');
+            $('#partNumber,#name,#manufacturer,#spec,#location,#description').val('');
+            $('#categoryId').val('');
+            $('#supplierId').val('');
+            $('#unit').val('个');
+            $('#stockQuantity').val(0).prop('disabled', true)
+                .attr('title', '库存变更会生成流水，请使用出入库管理');
+            $('#minStock').val(10);
+            $('#componentModal').addClass('show');
+        }
+
+        function editComponent(id) {
+            $.get('component?action=detail&id=' + id, function(res) {
+                if (res.code === 200) {
+                    var c = res.data;
+                    $('#modalTitle').text('编辑元件');
+                    $('#editId').val(c.id);
+                    $('#partNumber').val(c.partNumber);
+                    $('#name').val(c.name);
+                    $('#categoryId').val(c.categoryId);
+                    $('#supplierId').val(c.supplierId || '');
+                    $('#manufacturer').val(c.manufacturer);
+                    $('#spec').val(c.spec);
+                    $('#unit').val(c.unit);
+                    $('#stockQuantity').val(c.stockQuantity).prop('disabled', true)
+                        .attr('title', '库存变更请使用出入库管理，确保同步生成流水记录');
+                    $('#minStock').val(c.minStock);
+                    $('#location').val(c.location);
+                    $('#description').val(c.description);
+                    $('#componentModal').addClass('show');
+                }
+            });
+        }
+
+        function closeModal() { $('#componentModal').removeClass('show'); }
+
+        var componentSaving = false;
+
+        function saveComponent() {
+            if (componentSaving) { return; }
+            var data = {
+                partNumber: $('#partNumber').val().trim(),
+                name: $('#name').val().trim(),
+                categoryId: $('#categoryId').val() ? parseInt($('#categoryId').val()) : null,
+                supplierId: $('#supplierId').val() ? parseInt($('#supplierId').val()) : null,
+                manufacturer: $('#manufacturer').val().trim(),
+                spec: $('#spec').val().trim(),
+                unit: $('#unit').val().trim() || '个',
+                stockQuantity: parseInt($('#stockQuantity').val()) || 0,
+                minStock: parseInt($('#minStock').val()) || 10,
+                location: $('#location').val().trim(),
+                description: $('#description').val().trim()
+            };
+            if (!data.partNumber || !data.name) { alert('编号和名称为必填项'); return; }
+
+            var editId = $('#editId').val();
+            if (editId) { data.id = parseInt(editId); }
+            var action = editId ? 'update' : 'add';
+            componentSaving = true;
+            $('#componentSubmitBtn').prop('disabled', true).text('保存中...');
+
+            $.ajax({
+                url: 'component?action=' + action,
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(data),
+                processData: false,
+                success: function(res) {
+                    if (res.code === 200) { closeModal(); loadComponents(); alert('保存成功'); }
+                    else { alert(res.msg || '保存失败'); }
+                },
+                complete: function() {
+                    componentSaving = false;
+                    $('#componentSubmitBtn').prop('disabled', false).text('保存');
+                }
+            });
+        }
+
+        function deleteComponent(id, name) {
+            if (!confirm('确定删除元件【' + name + '】吗？')) return;
+            $.get('component?action=delete&id=' + id, function(res) {
+                if (res.code === 200) { loadComponents(); alert('删除成功'); }
+                else { alert(res.msg || '删除失败'); }
+            });
+        }
+
+        $('#componentBody').on('click', '.js-edit-component', function() {
+            editComponent($(this).attr('data-id'));
+        });
+        $('#componentBody').on('click', '.js-delete-component', function() {
+            var name = $(this).closest('tr').children('td').eq(1).text();
+            deleteComponent($(this).attr('data-id'), name);
+        });
+        $('#searchInput').on('keyup', function(e) { if (e.keyCode === 13) searchComponents(); });
+        loadCategories();
+        loadSuppliers();
+        loadComponents();
+    </script>
+</body>
+</html>
